@@ -1,0 +1,213 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>多币种实时换算器</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table th, table td {
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+    select, input {
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 100%;
+    }
+    .button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: block;
+      width: 100%;
+      font-size: 16px;
+    }
+    .button:hover {
+      background: #45a049;
+    }
+    .small-text {
+      text-align: center;
+      color: #888;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>多币种实时换算器</h1>
+
+    <div style="text-align: center; margin-bottom: 10px;">
+      目标货币：
+      <select id="targetCurrency"></select>
+    </div>
+
+    <table id="conversionTable">
+      <thead>
+        <tr>
+          <th>金额</th>
+          <th>币种</th>
+          <th>换算结果</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+
+    <button class="button" onclick="addRow()">添加一行</button>
+
+    <div class="small-text" id="lastUpdated">加载中...</div>
+  </div>
+
+  <script>
+    const currencies = ["EUR", "USD", "JPY", "KRW", "THB", "MYR", "SGD", "AUD", "GBP", "IDR", "INR", "NZD"];
+    let rates = {};
+    let targetCurrency = 'CNY';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      loadSavedData();
+      await fetchRates();
+      buildTargetCurrencySelector();
+      if (document.querySelectorAll('#conversionTable tbody tr').length === 0) {
+        addRow();
+      }
+      updateAll();
+    });
+
+    async function fetchRates() {
+      try {
+        const res = await fetch(`https://api.exchangerate.host/latest?base=${targetCurrency}`);
+        const data = await res.json();
+        rates = data.rates;
+        document.getElementById('lastUpdated').innerText = "汇率更新时间：" + new Date(data.date).toLocaleString();
+      } catch (error) {
+        document.getElementById('lastUpdated').innerText = "汇率加载失败，请刷新重试";
+        console.error(error);
+      }
+    }
+
+    function buildTargetCurrencySelector() {
+      const selector = document.getElementById('targetCurrency');
+      selector.innerHTML = '';
+
+      const option = document.createElement('option');
+      option.value = 'CNY';
+      option.innerText = 'CNY (人民币)';
+      selector.appendChild(option);
+
+      currencies.forEach(cur => {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        opt.innerText = cur;
+        selector.appendChild(opt);
+      });
+
+      selector.value = targetCurrency;
+      selector.onchange = async () => {
+        targetCurrency = selector.value;
+        await fetchRates();
+        updateAll();
+        saveData();
+      };
+    }
+
+    function addRow(amount = '', currency = 'USD') {
+      const tbody = document.querySelector('#conversionTable tbody');
+      const tr = document.createElement('tr');
+
+      tr.innerHTML = `
+        <td><input type="number" step="any" value="${amount}" oninput="updateAll()"></td>
+        <td>
+          <select onchange="updateAll()">
+            ${currencies.map(cur => `<option value="${cur}" ${cur === currency ? 'selected' : ''}>${cur}</option>`).join('')}
+          </select>
+        </td>
+        <td class="result">-</td>
+        <td><button onclick="removeRow(this)">删除</button></td>
+      `;
+
+      tbody.appendChild(tr);
+    }
+
+    function removeRow(button) {
+      button.closest('tr').remove();
+      updateAll();
+      saveData();
+    }
+
+    function updateAll() {
+      const rows = document.querySelectorAll('#conversionTable tbody tr');
+      rows.forEach(row => {
+        const amountInput = row.querySelector('input');
+        const currencySelect = row.querySelector('select');
+        const resultTd = row.querySelector('.result');
+
+        const amount = parseFloat(amountInput.value);
+        const currency = currencySelect.value;
+
+        if (!isNaN(amount) && rates[currency]) {
+          const converted = amount / rates[currency];
+          resultTd.innerText = `${converted.toFixed(2)} ${targetCurrency}`;
+        } else {
+          resultTd.innerText = "-";
+        }
+      });
+
+      saveData();
+    }
+
+    function saveData() {
+      const rows = Array.from(document.querySelectorAll('#conversionTable tbody tr')).map(row => {
+        const amount = row.querySelector('input').value;
+        const currency = row.querySelector('select').value;
+        return { amount, currency };
+      });
+
+      localStorage.setItem('multi-currency-data', JSON.stringify({
+        targetCurrency,
+        rows
+      }));
+    }
+
+    function loadSavedData() {
+      const saved = localStorage.getItem('multi-currency-data');
+      if (saved) {
+        const data = JSON.parse(saved);
+        targetCurrency = data.targetCurrency || 'CNY';
+        if (data.rows) {
+          data.rows.forEach(r => addRow(r.amount, r.currency));
+        }
+      }
+    }
+  </script>
+</body>
+</html>
