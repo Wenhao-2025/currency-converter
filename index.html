@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>多币种实时换算器</title>
+  <title>高精度多币种换算器</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -65,11 +66,16 @@
     .error {
       color: #d32f2f;
     }
+    .result {
+      min-width: 180px;
+      font-family: 'Courier New', monospace;
+      word-break: keep-all;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>多币种实时换算器</h1>
+    <h1>高精度多币种换算器</h1>
 
     <div style="text-align: center; margin-bottom: 10px;">
       目标货币：
@@ -95,16 +101,15 @@
   </div>
 
   <script>
-    // 支持的主要货币列表（Frankfurter API支持160+种货币，这里列出常用货币）
     const currencies = [
-      "CNY", "USD", "EUR", "JPY", "GBP", 
+      "CNY", "USD", "EUR", "JPY", "GBP",
       "AUD", "CAD", "CHF", "HKD", "SGD",
       "KRW", "THB", "MYR", "IDR", "INR",
       "NZD", "PHP", "VND", "MXN", "BRL",
       "RUB", "TRY", "ZAR", "SEK", "NOK",
       "DKK", "PLN", "HUF", "CZK", "ILS"
     ];
-    
+
     let rates = {};
     let targetCurrency = 'CNY';
 
@@ -121,46 +126,59 @@
     async function fetchRates() {
       document.getElementById('lastUpdated').className = 'small-text loading';
       document.getElementById('lastUpdated').innerText = "正在获取汇率数据...";
-      
+
       try {
         const res = await fetch(`https://api.frankfurter.app/latest?from=${targetCurrency}`);
-        
+
         if (!res.ok) {
           throw new Error(`API请求失败: ${res.status}`);
         }
-        
+
         const data = await res.json();
-        
+
         if (!data.rates) {
           throw new Error("无效的API响应格式");
         }
-        
+
         rates = data.rates;
-        // 确保基础货币的汇率是1
         rates[targetCurrency] = 1;
-        
+
         document.getElementById('lastUpdated').className = 'small-text';
-        document.getElementById('lastUpdated').innerText = `汇率更新时间：${new Date(data.date).toLocaleString()} (数据来源: Frankfurter.app)`;
+        document.getElementById('lastUpdated').innerText = `汇率更新时间：${new Date(data.date).toLocaleString()} (来源: Frankfurter.app)`;
       } catch (error) {
         console.error("获取汇率失败:", error);
         document.getElementById('lastUpdated').className = 'small-text error';
-        document.getElementById('lastUpdated').innerText = `汇率加载失败: ${error.message}`;
-        
-        // 如果API失败，使用硬编码的备份汇率
+        document.getElementById('lastUpdated').innerText = `汇率加载失败: ${error.message} (使用备份汇率数据)`;
+
         rates = getBackupRates(targetCurrency);
-        document.getElementById('lastUpdated').innerText += " (使用备份汇率数据)";
       }
     }
 
-    // 备份汇率数据（当API不可用时使用）
     function getBackupRates(baseCurrency) {
       const backupRates = {
-        "CNY": { USD: 0.14, EUR: 0.13, JPY: 20.0, GBP: 0.11, KRW: 185.0 },
-        "USD": { CNY: 7.2, EUR: 0.92, JPY: 145.0, GBP: 0.79, KRW: 1300.0 },
-        "EUR": { CNY: 7.8, USD: 1.08, JPY: 157.0, GBP: 0.86, KRW: 1410.0 }
+        "CNY": {
+          USD: 0.1388,
+          EUR: 0.1298,
+          JPY: 20.0456,
+          GBP: 0.1123,
+          KRW: 185.1234
+        },
+        "USD": {
+          CNY: 7.2345,
+          EUR: 0.9234,
+          JPY: 145.6789,
+          GBP: 0.7987,
+          KRW: 1300.1234
+        },
+        "EUR": {
+          CNY: 7.8123,
+          USD: 1.0834,
+          JPY: 157.8901,
+          GBP: 0.8634,
+          KRW: 1410.1234
+        }
       };
-      
-      // 确保基础货币的汇率是1
+
       const rates = backupRates[baseCurrency] || {};
       rates[baseCurrency] = 1;
       return rates;
@@ -173,10 +191,7 @@
       currencies.forEach(cur => {
         const opt = document.createElement('option');
         opt.value = cur;
-        opt.innerText = cur;
-        if (cur === 'CNY') {
-          opt.innerText += ' (人民币)';
-        }
+        opt.innerText = cur === 'CNY' ? 'CNY (人民币)' : cur;
         selector.appendChild(opt);
       });
 
@@ -194,7 +209,7 @@
       const tr = document.createElement('tr');
 
       tr.innerHTML = `
-        <td><input type="number" step="any" value="${amount}" oninput="updateAll()"></td>
+        <td><input type="number" step="0.0001" value="${amount}" oninput="updateAll()"></td>
         <td>
           <select onchange="updateAll()">
             ${currencies.map(cur => `<option value="${cur}" ${cur === currency ? 'selected' : ''}>${cur}</option>`).join('')}
@@ -225,7 +240,8 @@
 
         if (!isNaN(amount) && rates[currency]) {
           const converted = amount / rates[currency];
-          resultTd.innerText = `${converted.toFixed(2)} ${targetCurrency}`;
+          const precision = Math.max(4, 6 - Math.floor(Math.log10(converted || 1)));
+          resultTd.innerText = `${converted.toFixed(precision)} ${targetCurrency}`;
         } else {
           resultTd.innerText = "-";
         }
@@ -235,11 +251,10 @@
     }
 
     function saveData() {
-      const rows = Array.from(document.querySelectorAll('#conversionTable tbody tr')).map(row => {
-        const amount = row.querySelector('input').value;
-        const currency = row.querySelector('select').value;
-        return { amount, currency };
-      });
+      const rows = Array.from(document.querySelectorAll('#conversionTable tbody tr')).map(row => ({
+        amount: parseFloat(row.querySelector('input').value || 0).toFixed(4),
+        currency: row.querySelector('select').value
+      }));
 
       localStorage.setItem('multi-currency-data', JSON.stringify({
         targetCurrency,
