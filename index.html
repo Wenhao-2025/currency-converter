@@ -105,7 +105,7 @@
 
     async function fetchRates() {
       try {
-        const res = await fetch(`https://api.exchangerate.host/latest?base=${targetCurrency}`);
+        const res = await fetch(`https://dimoo-currency-api.pages.dev/latest?base=${targetCurrency}`);
         const data = await res.json();
         rates = data.rates;
         document.getElementById('lastUpdated').innerText = "汇率更新时间：" + new Date(data.date).toLocaleString();
